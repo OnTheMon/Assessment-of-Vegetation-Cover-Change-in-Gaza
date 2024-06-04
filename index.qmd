@@ -1,0 +1,605 @@
+# Assessment of Vegetation Cover Change in Gaza Under the Israeli-Palestinian Conflict
+
+## Project Summary 
+
+This application is based on remote sensing technology and machine learning algorithms to assess vegetation cover changes in Gaza during the Palestinian-Israeli conflict. Based on **Sentinel-2** satellite data and the Google Earth Engine platform, the application adopts an automated image preprocessing process (including image extraction, image synthesis, and masking) and utilizes the Random Forest algorithm to develop a classifier to distinguish between three different types of land cover: vegetation, bare land, and urban areas. The project aims to reveal changes in vegetation cover in the Gaza by generating and comparing land cover classification maps before and after the conflict, thereby providing clear evidence to assess the ongoing humanitarian crisis and urban destruction in the Gaza area.
+
+![War hazards in Gaza](images/after_conflict.jpg)
+
+
+### Problem Statement 
+
+**Challenges in Monitoring Vegetation Cover**:
+
+Due to the ongoing conflict in the Gaza area, ground access is extremely limited, making traditional surveying methods unfeasible and accurate information on vegetation status and changes unattainable. This project utilize remote sensing technology and machine learning methods to provide a safe and effective way to monitor vegetation cover changes from a distance, thus solving the challenges of on-site measurement.
+
+**Humanitarian Crisis and Food Dependency in Gaza**:
+
+Gaza is one of the most densely populated areas in the world and faces chronic food shortages, heavily relying on international aid. The escalation of the Israel-Palestine conflict has led to the severance of aid supply channels, further increasing the local population's dependency on limited arable land resources. In this context, remote sensing data analysis can effectively assess the impact of the conflict on agricultural land, thereby quantifying the severity of the humanitarian crisis.
+
+
+### End User 
+
+**International Aid and Humanitarian Organizations**:
+
+Humanitarian organizations require accurate data to assess the impact of conflicts on local ecology and agricultural productivity, to optimize their aid plans and resource allocation. The remote sensing analysis provided by this project can guide them in formulating more effective rescue and assistance strategies during emergencies.
+
+**Regional Research Scholars**:
+
+For the Gaza region, which relies heavily on agricultural production, understanding changes in vegetation cover is crucial for adjusting agricultural production plans and farming methods. The results of this project can aid researchers studying the food structure of this region in predicting yield changes and providing sound advice to address Gaza's food shortage issues.
+
+**Public and Media**:
+
+The results processed through professional technical methods can be visually presented to the public and media, thereby drawing broader attention to the ongoing humanitarian crisis in the Gaza area through more extensive channels.
+
+
+### Data
+
+This software utilizes satellite imagery data from the Sentinel-2 satellite provided by the European Space Agency (ESA). It uses the visible and near-infrared bands with a **spatial resolution** of 10 meters. Sentinel-2 has a **temporal resolution** of 5 days, which means it can provide imagery of any location globally every 5 days. The combination of high resolution and high revisit frequency makes Sentinel-2 an ideal data source for analyzing changes in vegetation cover in the Gaza region.
+
+### Methodology
+
+1.Random Forest- for classification  
+![Random Forest Diagram](images/random_forest_diagram.jpg)
+
+2.Confusion Matrix  - for validation
+
+<i>Confusion Matrix Accuracy Formula:</i>
+
+\begin{equation} Accuracy = \frac{TP + TN}{TP + FP + FN + TN}\end{equation}
+
+TP: the number of cases that the model correctly predicted as positive. (True Positive)  
+FP: the number of negative cases that the model incorrectly predicted as positive (False Positive)  
+FN: the number of positive cases that the model incorrectly predicted as negative (False Negative)  
+TN: the number of negative cases that the model correctly predicted as negative (True Negative) 
+
+3.Comparison Validation: 
+
+The land use type predicted by the model is compared with the actual picture to judge whether the model result is correct.
+
+
+### Interface
+
+The following four UI designs are mainly used to meet the needs of users:
+
+1. Different colored legends were designed to represent different types of land. For example, green represents vegetation, yellow represents bare land, and gray represents urban.
+2. A dropdown menu related to time has been designed, allowing users to freely choose the year and month before and after the conflict.
+3. A line chart has been designed, allowing users to clearly see the changes in arable land area between 5 months before and after the conflict.
+4. Designed a GIF animated map, where users can see the changes in three types of land in Gaza after the conflict and download it.
+
+
+## The Application 
+
+Replace the link below with the link to your application.
+
+:::{.column-page}
+
+<iframe src=' https://bigdata0025.projects.earthengine.app/view/gaza ' width='100%' height='700px'></iframe>
+
+:::
+## How it Works 
+
+## Ⅰ. Classification and Projection of Land Use Types in Gaza
+
+The complete process code can be seen here:[Classification and interaction](https://code.earthengine.google.com/25507ac35cfd75c0be52d6f601928373) ； [Calculation of area](https://code.earthengine.google.com/5fda35fc10834046f5853cd7d4db7251)
+
+### Preprocessing
+1. We've defined the meanings of the data stored in the object in the code: 
+```js
+// define the meanings of the data
+var dates = [
+  {year: 2022, month: '11', pathSuffix: '2022_11'},// 'year' are used to describe the starting date for each month
+  {year: 2022, month: '12', pathSuffix: '2022_12'},// 'month'are used to describe the month number for each month
+  {year: 2023, month: '01', pathSuffix: '2023_01'},// 'pathSuffix' are used to describe the path suffix for each month
+  {year: 2023, month: '02', pathSuffix: '2023_02'},
+  {year: 2023, month: '03', pathSuffix: '2023_03'},
+  {year: 2023, month: '11', pathSuffix: '2023_11'},
+  {year: 2023, month: '12', pathSuffix: '2023_12'},
+  {year: 2024, month: '01', pathSuffix: '2024_01'},
+  {year: 2024, month: '02', pathSuffix: '2024_02'},
+  {year: 2024, month: '03', pathSuffix: '2024_03'}
+];
+```
+2. We have defined visualization parameters, selecting appropriate bands to create a color image.
+```js
+// define visualization parameters
+var s_rgb = {
+  min: 0.0,//'min' represent the minimum values of the data
+  max: 6000,//'max' represent the maximum values of the data
+  bands:['B4', 'B3', 'B2'],// three bands are used: 'B4', 'B3', and 'B2', corresponding to the red, green, and blue bands, typically employed for creating color images.
+ // bands:['B8', 'B4', 'B3'], // false-color composite using near-infrared, red, and green bands. 
+  opacity:1
+};
+```
+3. This code filters, processes, and visualizes the acquired Sentinel image collection, resulting in a composite image.
+ Additionally, it calculates the Normalized Difference Water Index (NDWI) and removes pixels with NDWI values less than 0.3 from the composite image.
+```js
+dates.forEach(function(dateRange) {
+  var start = dateRange.year + '-' + dateRange.month + '-01';
+  var end = new Date(dateRange.year, dateRange.month, 0).toISOString().split('T')[0]; // Auto-adjust month length
+  var sentinel = ee.ImageCollection('COPERNICUS/S2_SR')
+                    .filter(ee.Filter.date(start, end))
+                    .filter(ee.Filter.lt('CLOUDY_PIXEL_PERCENTAGE', 15))// selected all images within the time range with cloud cover less than 15%
+                    .select(bands) // Ensure selecting a consistent band set before filtering.
+                    .median();// calculated the median of these images based on the specified bands.
+  var ndwi = sentinel.normalizedDifference(['B3','B8']).rename('ndwi');
+  var image = sentinel.updateMask(ndwi.lt(0.3)).select(bands);
+
+  Map.addLayer(image.clip(aoi), s_rgb, 'Sentinel ' + dateRange.year + '-' + dateRange.month);// Clip the processed image to the region of interest (aoi) and add it to the map using the visualization parameters s_rgb. The layer is labeled as 'Sentinel'.
+```
+4. This portion loads a FeatureCollection of land types for a specific month and stores it in the variable landTypes.
+```js
+  // Load a FeatureCollection for a specific month.
+  var basePath = 'projects/ucfnqma/assets/Gaza/land_types_' + dateRange.pathSuffix;
+  var landTypes = ee.FeatureCollection(basePath);
+```
+5. This code segment generates sample point collections of three classes,merge them and adds a random column to each sample point for subsequent operations such as image clipping.
+```js
+  // Generate sample points for each land type.
+  var vegetationPoints = ee.FeatureCollection.randomPoints({
+    region: landTypes.filter(ee.Filter.eq('landType', 'vegetation')),
+    points: 3000 // Assuming the number of points for vegetation class
+  }).map(function(feat) { return feat.set('class', 0); });
+  
+  var barePoints = ee.FeatureCollection.randomPoints({
+    region: landTypes.filter(ee.Filter.eq('landType', 'bare')),
+    points: 2000 // Assuming the number of points for bare soil class
+  }).map(function(feat) { return feat.set('class', 1); });
+  
+  var urbanPoints = ee.FeatureCollection.randomPoints({
+    region: landTypes.filter(ee.Filter.eq('landType', 'urban')),
+    points: 1000 // Assuming the number of points for urban class.
+  }).map(function(feat) { return feat.set('class', 2); });
+  // Merge all sample points and add a random column for subsequent segmentation.
+  var sample = vegetationPoints.merge(barePoints).merge(urbanPoints).randomColumn();
+```
+
+Polygons are drawn for each class, which you can see under the Geometry Import TAB in the upper left corner of the code editor
+
+![Draw the training set polygons](images/select.png)
+
+### Analysis （Train Model and Prediction）
+6. In this section we defined the split ratio using 'var split = 0.7'.
+
+```js
+ // Split sample set
+  var split = 0.7;
+  var training_sample = sample.filter(ee.Filter.lt('random', split));
+  var validation_sample = sample.filter(ee.Filter.gte('random', split));
+```
+Based on the values of the random columns, 70% of the sample points are assigned to the verification set, and the remaining 30% are kept in the training set.
+
+7. By extracting training set and validation set, the random forest model is initially fitted so that we train the model.
+```js
+  // take samples from image for training
+  var training = image.select(bands).sampleRegions({
+    collection: training_sample,
+    properties: ['class'],
+    scale: 10,
+  }).filter(ee.Filter.notNull(bands)); 
+
+  // take samples from image for validation 
+  var validation = image.select(bands).sampleRegions({
+    collection: validation_sample,
+    properties: ['class'],
+    scale: 10,
+  }).filter(ee.Filter.notNull(bands)); 
+```
+
+
+8.This section trains the model by fitting it with a training set and a validation set
+
+```js
+  // Trian the model
+ var model = ee.Classifier.smileRandomForest(500).train({
+    features: training,
+    classProperty: 'class',
+    inputProperties: bands
+  });
+
+  // Calculate the confusion matrix for the training data
+  var trainAccuracy = training.classify(model).errorMatrix('class', 'classification');
+  print('Training error matrix: '+ dateRange.year + '-' + dateRange.month, trainAccuracy);
+  print('Training overall accuracy: '+ dateRange.year + '-' + dateRange.month, trainAccuracy.accuracy());
+
+  // Apply the RF classifier to the validation
+  var validated = validation.classify(model); // Fix using validation instead of validation_sample
+
+  // Calculate the confusion matrix for the validation data
+  var testAccuracy = validated.errorMatrix('class', 'classification');
+  print('Validation error matrix: '+ dateRange.year + '-' + dateRange.month, testAccuracy);
+  print('Validation overall accuracy: '+ dateRange.year + '-' + dateRange.month, testAccuracy.accuracy());
+
+```
+The function of the model is chosen such that we use 'class' read data for categorical prediction.
+
+9.After fitting the model, we use the overall image to classify the prediction using the dataset
+
+```js
+  var prediction = image.classify(model);
+
+  var landType_prediction = prediction.updateMask(prediction.neq(-1)); // Avoid using unclassified pixels
+  Map.addLayer(landType_prediction.clip(aoi), {min: 0, max: 2, palette: ['green', 'yellow', 'grey']}, 'LandType Prediction ' + dateRange.year + '-' + dateRange.month);
+
+});
+```
+In order to check the accuracy of the results, we can compare and analyze the results with the actual images
+
+![Resulting image](images/classification.jpg)
+
+![Real image](images/after_conflict.jpg)
+
+
+10.For a better view of the results, combine all results into one layer feature.
+
+```js
+var vegetation = ee.FeatureCollection(vegetation.map(function(feature) {
+  return ee.Feature(feature).set('landType', 'vegetation');
+}));
+
+var urban = ee.FeatureCollection(urban.map(function(feature) {
+  return ee.Feature(feature).set('landType', 'urban');
+}));
+
+var bare = ee.FeatureCollection(bare.map(function(feature) {
+  return ee.Feature(feature).set('landType', 'bare');
+}));
+
+// Merge into a FeatureCollection
+var combinedFeatures = vegetation.merge(urban).merge(bare);
+```
+
+## Ⅱ. Interface (Analysis area and conduct the Visual interaction)
+
+
+1. Create a map instance and Set the center point and zoom level of the map
+
+```js
+var map1 = ui.Map();
+map1.centerObject(aoi,10.5);
+```
+
+2. Add a side UI, then create a selection box to place it in the side UI. Users can select 2022-11, 2022-12, 2023-1, 2023-2, 2023-11, 2023-12, 2024-1, 2024-2, 2024-3, and call a function to update the displayed layer.
+```js
+var imageCollection = classificationCollection.map(function(img){
+  return img.clip(aoi);
+});
+// Create a selection box 
+var select = ui.Select({
+  items: ['2022-11', '2022-12', '2023-01', '2023-02', '2023-03','2023-11', '2023-12', '2024-01', '2024-02', '2024-03'],
+  value: '2022-11',  //Default selection '2022-11'
+  placeholder: 'Choose a number',
+  onChange: function(value) {
+    // Call the function to update the map
+    updateMaps(value);
+  }
+});
+
+// Create a label
+var label = ui.Label('Please select a time', {margin: '10px 0px 5px 0px'});
+
+// Create a panel where you can place the selection boxes and labels
+var controlPanel = ui.Panel({
+  widgets: [label, select],
+  style: {width: '300px', padding: '10px'} , // Positioning and styling
+  layout: ui.Panel.Layout.flow('horizontal')  // Set to horizontal layout
+});
+
+// Add the map to the root panel
+ui.root.widgets().reset([map1]);
+
+// Set the style of the map
+map1.style().set('width', '65%');
+
+// Create a panel to place the control panel
+var sidebarPanel = ui.Panel({
+  widgets: [controlPanel],
+  style: {position: 'top-right', width: '120px',height: '300px',  margin: '0px 10px 0px 0px'}
+});
+
+// Adds the sidebar panel to the root panel
+ui.root.add(sidebarPanel);
+```
+
+This is the detail of update function. In this function, we first converts a collection of images to a list, then determine the index of the image by month. 
+```js
+// Converts a collection of images to a list
+var imageList = imageCollection.toList(imageCollection.size());
+
+function updateMaps(month) {
+  // Determine the index of the image by month
+  var index1;
+  switch (month) {
+    case '2022-11':
+      index1 = 0;
+      break;
+    case '2022-12':
+      index1 = 1;
+      break;
+    case '2023-01':
+      index1 = 2;
+      break;
+    case '2023-02':
+      index1 = 3;
+      break;
+    case '2023-03':
+      index1 = 4;
+      break;
+    case '2023-11':
+      index1 = 5;
+      break;
+    case '2023-12':
+      index1 = 6;
+      break;
+    case '2024-01':
+      index1 = 7;
+      break;
+    case '2024-02':
+      index1 = 8;
+      break;
+    case '2024-03':
+      index1 = 9;
+      break;
+    default:
+      console.error('Invalid month selected:', month);
+      return;
+  }
+  // Get the image by index
+  var image1 = ee.Image(imageList.get(index1));
+```
+
+3. Add the legends to the map. We define the color list and description list, then create the legend style and legend panel. Add legend items in a loop. It contains description labels and color blocks, adds legend items to the inside version of the diagram, and adds legends to the lower left corner of the map.
+```js
+pdateMaps('2022-11');
+
+// Define the color list and description list
+var palette = ['green', 'yellow', 'grey']; // Suppose this is your list of colors
+var names = ['vegetation', 'bare', 'urban']; // A description corresponding to the color
+
+// Create a style for the legend
+var legendStyle = {
+  margin: '0px 8px 15px 0px',
+  padding: '0px 5px 5px 0px',
+  position: 'bottom-left'
+};
+
+// Create the panel of legend
+var legendPanel = ui.Panel({
+  widgets: [], // Used to add legend entries
+  style: legendStyle
+});
+
+// Add a legend entry
+for (var i = 0; i < palette.length; i++) {
+  var legendItem = ui.Panel({
+    layout: ui.Panel.Layout.Flow('horizontal'),
+    style: {margin: '0px 10px'}
+  });
+  
+  // create color block
+  var colorBlock = ui.Label({
+    style: {
+      backgroundColor: palette[i],
+      padding: '5px',
+      margin: '0 0 4px 0'
+    }
+  });
+  
+  // create desctription label
+  var description = ui.Label({
+    value: names[i],
+    style: {margin: '0 0 4px 8px'}
+  });
+  
+  legendItem.add(colorBlock);
+  legendItem.add(description);
+  
+  // Adds a legend item to the Legend panel
+  legendPanel.add(legendItem);
+}
+
+// Add the legend to the bottom left corner of the map
+map1.add(legendPanel);
+```
+
+4. Before drawing a line graph of vegetation area changes before and after conflicts, we need to export the image for area calculation. (Note: Due to the high computational complexity, calling the area calculation function directly can lead to long waiting times and may cause webpage crashes. Therefore, it is necessary to export the area calculation results first.)
+
+```js
+// Batch download functions
+function exportImage(image, roi, fileName) {  
+  Export.image.toAsset({  
+    image: image,
+    description: 'GAZA_'+fileName,
+    region: aoi,
+    scale: 10,
+    maxPixels: 1e13, // Maximum image element
+  });  
+}
+
+// Generate the list and download iteratively
+var indexList = classificationCollection.reduceColumns(ee.Reducer.toList(), ["system:index"]).get("list"); 
+print("indexList", indexList);
+indexList.evaluate(function(indexs) { 
+  for (var i=0; i<indexs.length; i++) {  
+    var image = classificationCollection.filter(ee.Filter.eq("system:index", indexs[i]))
+      .first()
+    var name=parseInt(indexs[i])
+        
+    exportImage(image, aoi, name);  //Save the image to Asset
+  }
+}); 
+
+var aoi = ee.FeatureCollection('users/liujingyue01/Gaza');
+var imageCollection=ee.ImageCollection('projects/ee-guo112591/assets/GAZA');
+
+// Calculating the vegetation area as a function
+function calculateVegetationArea(image) {
+  var vegetationArea = image.select('classification').eq(0).multiply(ee.Image.pixelArea()).reduceRegion({
+    reducer: ee.Reducer.sum(),
+    geometry: aoi,
+    scale: 30
+  }).get('classification');
+  return ee.Feature(null, {'date': image.get('date'), 'vegetationArea': vegetationArea});
+}
+
+// Apply a function to each Image in the imageCollection
+var vegetationAreas = imageCollection.map(calculateVegetationArea).sort('date');
+
+// Convert the result to a list
+var vegetationAreaList = vegetationAreas.toList(vegetationAreas.size());
+print(vegetationAreaList)
+var firstFive = ee.List.sequence(0, 9).map(function(i) { return ee.Feature(vegetationAreaList.get(i)).get('vegetationArea'); });
+// var lastFive = ee.List.sequence(5, 9).map(function(i) { return ee.Feature(vegetationAreaList.get(i)).get('vegetationArea'); });
+
+// Convert the area to a numerical value
+var firstFiveNumbers = firstFive.map(function(area) { return ee.Number(area); });
+print(firstFiveNumbers)
+```
+5. Draw the area calculation results onto a line graph. Set two y values before and after the conflict, which are two lines.
+
+```js
+var firstFiveNumbers = ee.List([ 108.981451,
+  124.064503,
+  156.647346,
+  160.888861,
+  191.688693]);
+var lastFiveNumbers = ee.List([145.504210,
+  160.795185,
+  125.786433,
+  105.063353, 
+  107.703722]);
+
+// Abscissa data
+var xAxis = ['11', '12', '1', '2', '3'];
+
+// Create a data source in the DataTable format that conforms to the Google Visualization API
+var chartData = ee.FeatureCollection(xAxis.map(function(x, index) {
+  return ee.Feature(null, {
+    'x': x,
+    'y1': firstFiveNumbers.get(index),
+    'y2': lastFiveNumbers.get(index)
+  });
+}));
+
+// Create a line chart using ui.Chart
+var lineChart = ui.Chart.feature.byFeature({
+  features: chartData,
+  xProperty: 'x',
+  yProperties: ['y1', 'y2'] // Add two sets of y values
+}).setSeriesNames(['Before the conflict', 'After the conflict']) // Set series name
+  .setOptions({
+    title: 'Comparison of areas before and after the conflict',
+    hAxis: {title: 'month', titleTextStyle: {color: 'red'}},
+    vAxis: {title: 'vegetation Area', titleTextStyle: {color: 'blue'}},
+    legend: 'right' // Display legend
+  });
+
+// Set the size of the chart
+var options = {
+  title: 'Comparison of areas before and after the conflict',
+  hAxis: {title: 'month', titleTextStyle: {color: 'red'}},
+  vAxis: {title: 'vegetation Area (km^2)', titleTextStyle: {color: 'blue'}},
+  legend: 'right',
+  width: 400, // Set chart width
+  height: 300 // Set chart height
+};
+
+// Create a line chart
+var lineChart = ui.Chart.feature.byFeature({
+  features: chartData,
+  xProperty: 'x',
+  yProperties: ['y1', 'y2']
+}).setSeriesNames(['Before the cnflict', 'After the conflict']).setOptions(options);
+
+// Adjust the style of the sidebar panel to ensure that there is enough space to display the chart
+sidebarPanel.style().set({
+  width: '400px', // Sets the minimum width of the panel
+  height: 'auto' // Automatically adjust the height according to the content
+});
+
+// Adds a line chart to the sidebar panel
+sidebarPanel.add(lineChart);
+```
+
+6. Draw a GIF image of post conflict land changes (November 2023.11-204.3) and place it in the side UI.
+
+```js
+//show gif
+function main() {
+  //Assume that the roi is defined and is a Feature or FeatureCollection
+  var roi = aoi;
+
+  // Let's say imgCol is defined and it contains 10 single-band images
+  var imgCol = classificationCollection.map(function(image){
+    return image.clip(roi);
+  });
+  
+  // Gets the number of images in the collection
+  var count =imgCol.toList(imgCol.size()).length();
+
+  // Calculate the number of images to skip
+  var skipCount = 5;
+
+  // Skip the previous images to get the last five images
+  var lastFiveImages = classificationCollection.toList(classificationCollection.size())
+  .slice(skipCount, count);
+
+  // Converts a list back to a collection of images
+  imgCol = ee.ImageCollection.fromImages(lastFiveImages).map(function(img){
+    return img.clip(aoi)
+  });
+
+  // Defines a function to map a single-band image to an RGB color
+  function mapToRgb(image) {
+    // Get a single band image
+    var band = image.select([0]);
+
+    // Creates a new image with the same R, G, and B values for each pixel
+    var r = band.where(band.eq(0), 0).where(band.eq(1), 255).where(band.eq(2), 200).toInt(); 
+    var g = band.where(band.eq(0), 128).where(band.eq(1), 255).where(band.eq(2), 200).toInt(); 
+    var b = band.where(band.eq(0), 0).where(band.eq(1), 0).where(band.eq(2), 200).toInt();
+
+    // Returns a new image containing the RGB band
+    return ee.Image.cat(r, g, b).rename(['red', 'green', 'blue']).toFloat();
+  }
+
+  // Map each image to an RGB color
+  var rgbImgCol = imgCol.map(mapToRgb);
+
+  // GIF parameters
+  var params = {
+    crs: 'EPSG:3857',
+    framesPerSecond: 2,
+    region: roi.geometry().transform('EPSG:3857', 1), // Use the converted region
+    min: 0,
+    max: 255,
+    bands: ['red', 'green', 'blue'],
+    dimensions: 512,
+  };
+
+  // Add the GIF to the panel
+  sidebarPanel.add(ui.Thumbnail(rgbImgCol, params));
+  
+}
+
+main();
+```
+
+7. Create a tag and set the tag's hyperlink to download the GIF.
+
+```js
+// Create a label
+var label = ui.Label('Download the GIF of "Changing Land Conditions in Conflict".');
+
+// Set the URL of the tag to make it a hyperlink
+label.setUrl(rgbImgCol.getVideoThumbURL(params));
+
+sidebarPanel.add(label);
+```
+
+
+The image output should look like this:
+
+![Land cover changes in conflict, 2023.11-2024.3](images/conflict.gif)
+
+
